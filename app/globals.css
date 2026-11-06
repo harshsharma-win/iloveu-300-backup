@@ -648,25 +648,3 @@ html, body {
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
-
-.answer-panel { margin-bottom: 18px; padding: 20px; }
-.answer-heading, .answer-mode-row, .answer-result { display: flex; align-items: center; gap: 16px; }
-.answer-heading { justify-content: space-between; }
-.answer-heading h2 { margin: 4px 0 0; }
-.answer-toggle { border: 1px solid var(--line); border-radius: 999px; background: #eef2f6; color: #6d7b8c; padding: 8px 12px; display: flex; align-items: center; gap: 8px; font-weight: 800; cursor: pointer; }
-.answer-toggle span { width: 8px; height: 8px; border-radius: 50%; background: #97a3b1; }
-.answer-toggle.active { border-color: #9edbcf; background: #eaf8f5; color: #197d72; }
-.answer-toggle.active span { background: #2bb39d; box-shadow: 0 0 0 4px rgba(43,179,157,.12); }
-.answer-mode-row { justify-content: space-between; margin-top: 16px; }
-.answer-mode { display: flex; background: #edf1f5; padding: 4px; border-radius: 10px; }
-.answer-mode button { border: 0; background: transparent; color: #758397; padding: 7px 14px; border-radius: 7px; font-weight: 700; cursor: pointer; }
-.answer-mode button.active { background: white; color: #17324d; box-shadow: 0 2px 8px rgba(39,55,80,.08); }
-.answer-status { font-size: 12px; color: var(--muted); }
-.answer-result { margin-top: 14px; border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: #fbfcfd; }
-.answer-result > div:nth-child(2) { min-width: 0; flex: 1; }
-.answer-result > div:nth-child(2) strong, .answer-result > div:nth-child(2) span { display: block; }
-.answer-result > div:nth-child(2) span { color: var(--muted); font-size: 12px; margin-top: 3px; }
-.predicted-letter { width: 52px; height: 52px; border-radius: 14px; background: #17324d; color: white; display: grid; place-items:center; font-size: 24px; font-weight: 800; flex: 0 0 52px; }
-.answer-send { width: auto; min-height: 42px; padding: 0 16px; }
-.answer-send:disabled { opacity: .45; cursor: not-allowed; }
-.answer-disabled { opacity: .72; }
