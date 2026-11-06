@@ -49,6 +49,12 @@ export default function Page() {
   const [transcript, setTranscript] = useState<Transcript[]>([])
   const [listening, setListening] = useState(false)
   const [interimText, setInterimText] = useState('')
+  const [answerMode, setAnswerMode] = useState<'manual' | 'auto'>('manual')
+  const [answerEnabled, setAnswerEnabled] = useState(true)
+  const [predictedAnswer, setPredictedAnswer] = useState<'A' | 'B' | 'C' | 'D' | ''>('')
+  const [answerConfidence, setAnswerConfidence] = useState<number | null>(null)
+  const [answerReason, setAnswerReason] = useState('')
+  const [answerStatus, setAnswerStatus] = useState('')
   const recognitionRef = useRef<any>(null)
   const paragraphRef = useRef('')
   const shouldListenRef = useRef(false)
@@ -154,6 +160,34 @@ export default function Page() {
     void publishCommand({ signal: signal.signal === 'A' ? 'OPTION_1' : signal.signal === 'B' ? 'OPTION_2' : signal.signal === 'C' ? 'OPTION_3' : 'OPTION_4', motor, vibrations: signal.count, device: deviceId })
   }
 
+  async function solveTranscript(text: string) {
+    if (!answerEnabled) return
+    const mcq = parseMcq(text)
+    if (!mcq.question || mcq.options.length < 2) return
+
+    setAnswerStatus('Finding the answer…')
+    try {
+      const sessionResponse = await fetch('/api/esp32/session', { credentials: 'same-origin' })
+      if (!sessionResponse.ok) throw new Error('Dashboard session could not be created')
+      const response = await fetch('/api/mcq/answer', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(mcq),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error ?? 'Answer prediction failed')
+      const answer = result.answer as 'A' | 'B' | 'C' | 'D'
+      setPredictedAnswer(answer)
+      setAnswerConfidence(result.confidence ?? null)
+      setAnswerReason(result.reason ?? '')
+      setAnswerStatus(answerMode === 'auto' ? `Auto sending Option ${answer}` : `Predicted Option ${answer}`)
+      if (answerMode === 'auto' && answerEnabled) sendSignal(signals.find((signal) => signal.signal === answer) ?? signals[0])
+    } catch (error) {
+      setAnswerStatus(error instanceof Error ? error.message : 'Answer prediction failed')
+    }
+  }
+
   function sendMotorCommand(signal: 'QUICK_MOTOR_2' | 'REPEAT_QUESTION' | 'REPEAT_OPTION' | 'STOP' | 'CUSTOM_PATTERN', motor: number, vibrations: number, text: string, duration = 250, gap = 250) {
     if (sending) return
     addAction(text)
@@ -233,6 +267,7 @@ export default function Page() {
         const timestamp = new Date().toLocaleTimeString([], { hour12: false })
         setTranscript((items) => [...completedSentences.map((sentence) => ({ time: timestamp, text: formatSpeech(sentence), tag: 'Live' as const })), ...items].slice(0, 20))
         if (supabaseConfigured) void supabase.channel('esp32-relay-control').send({ type: 'broadcast', event: 'transcript', payload: { text: completedText } })
+        void solveTranscript(completedText)
       }
     }
 
@@ -301,6 +336,24 @@ export default function Page() {
       <header className="topbar"><div><p className="eyebrow">{new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date()).toUpperCase()}</p><h1>{page === 'dashboard' ? 'Good morning, Harsh' : 'Connection center'}</h1></div><div className="top-actions"><div className={`connection-pill ${connected ? '' : 'offline'}`} role="status" aria-live="polite"><i className="status-dot" /> {connected ? 'ESP32 connected' : 'Waiting for ESP32'}</div><button className="icon-button" aria-label="Open settings" onClick={() => setPage('connect')}><Settings2 size={18} /></button></div></header>
       {page === 'connect' ? <ConnectionPage connected={connected} setConnected={setConnected} deviceId={deviceId} setDeviceId={setDeviceId} endpoint={endpoint} setEndpoint={setEndpoint} onDashboard={() => setPage('dashboard')} /> : <>
         <section className={`status-banner ${connected ? '' : 'offline-banner'}`}><div className="status-icon"><ShieldCheck size={20} /></div><div><strong>{connected ? 'ESP32 control is ready' : 'ESP32 is not reporting online'}</strong><span>{connected ? 'Send vibration patterns over the internet. No shared Wi-Fi or LAN required.' : 'Check the device power and internet relay, then wait for its heartbeat.'}</span></div><button className="text-button" onClick={() => setPage('connect')}>Review connection <ChevronRight size={15} /></button></section>
+        <section className={`panel answer-panel ${answerEnabled ? '' : 'answer-disabled'}`}>
+          <div className="answer-heading">
+            <div><p className="section-label">AI ANSWER</p><h2>MCQ prediction</h2></div>
+            <button className={`answer-toggle ${answerEnabled ? 'active' : ''}`} onClick={() => { setAnswerEnabled((enabled) => !enabled); setAnswerStatus(answerEnabled ? 'Answer assistance paused' : 'Answer assistance enabled') }}><span />{answerEnabled ? 'ON' : 'OFF'}</button>
+          </div>
+          <div className="answer-mode-row">
+            <div className="answer-mode">
+              <button className={answerMode === 'manual' ? 'active' : ''} onClick={() => setAnswerMode('manual')}>Manual</button>
+              <button className={answerMode === 'auto' ? 'active' : ''} onClick={() => setAnswerMode('auto')}>Auto send</button>
+            </div>
+            <span className="answer-status">{answerStatus || (answerMode === 'auto' ? 'Predicted answer is sent automatically' : 'Review the prediction before sending')}</span>
+          </div>
+          <div className="answer-result">
+            <div className="predicted-letter">{predictedAnswer || '?'}</div>
+            <div><strong>{predictedAnswer ? `Option ${predictedAnswer}` : 'Waiting for a complete MCQ'}</strong><span>{answerConfidence !== null ? `${answerConfidence}% confidence · ${answerReason}` : 'Speak the question, then options A through D.'}</span></div>
+            <button className="listen-button answer-send" disabled={!predictedAnswer || !answerEnabled || sending} onClick={() => { const signal = signals.find((item) => item.signal === predictedAnswer); if (signal) sendSignal(signal) }}><Send size={16} /> Send answer</button>
+          </div>
+        </section>
         <div className="dashboard-grid control-layout"><section className="panel mic-panel"><div className="panel-heading"><div><p className="section-label">VOICE INPUT</p><h2>Phone microphone</h2></div><span className="live-badge"><span className="pulse-dot" /> {listening ? 'Listening' : 'Ready'}</span></div><div className="mic-stage"><div className={`mic-orb ${listening ? 'is-listening' : ''}`}><Mic size={34} /></div><div className="waveform">{[22,42,31,58,38,74,45,28,65,44,30,52,35,67,43].map((height, index) => <span key={index} style={{ height: `${listening ? height : 9}px` }} />)}</div><strong>{listening ? 'Listening for speech…' : 'Microphone is ready'}</strong><span className="muted">{listening ? 'Speech stays visible until you stop' : 'Tap start to capture your voice'}</span></div><button className="listen-button" onClick={toggleMicrophone}>{listening ? <><MicOff size={17} /> Stop listening</> : <><Mic size={17} /> Start listening</>}</button></section><section className="panel signal-panel"><div className="panel-heading"><div><p className="section-label">REMOTE OUTPUT</p><h2>Vibration options</h2></div><span className={`relay-status ${connected ? '' : 'offline-status'}`}><i className="status-dot" /> {connected ? 'ESP32 online' : 'ESP32 offline'}</span></div><p className="panel-description">A/B/C/D send a clear vibration response through the internet.</p><div className="signal-grid">{signals.map((signal) => <button key={signal.signal} className={`signal-card ${signal.tone} ${selected === signal.signal ? 'selected' : ''}`} onClick={() => sendSignal(signal)}><div className="signal-letter">{signal.signal}</div><div className="signal-copy"><strong>{signal.label}</strong><span>{signal.detail}</span></div><Send size={16} /></button>)}</div><div className="last-signal"><span>Last command</span><strong>Signal {lastSignal}</strong><span className="last-time">just now</span></div></section></div>
         <div className="lower-grid"><section className="panel transcript-panel transcript-workspace"><div className="panel-heading"><div><p className="section-label">LIVE MCQ TRANSCRIPT</p><h2>Question workspace</h2></div><div className="transcript-actions"><button className="small-action" onClick={copyTranscript}><Clipboard size={14} /> {copied ? 'Copied' : 'Copy'}</button><button className="small-action" onClick={() => setTranscript([])}><RefreshCw size={14} /> Clear</button></div></div><div className="transcript-live-bar"><i className={listening ? 'pulse-dot' : 'status-dot'} />{listening ? 'Listening live' : 'Transcript ready'}<span>{transcript.length} saved segment{transcript.length === 1 ? '' : 's'}</span></div><div className="transcript-content">{(listening || interimText || paragraphRef.current) && <div className="live-transcript"><div className="live-caption"><span>Now speaking</span><strong>{interimText ? 'Live words' : 'Ready'}</strong></div><p>{paragraphRef.current}{paragraphRef.current && interimText ? ' ' : ''}<span>{interimText}</span></p></div>}{transcript.length ? transcript.map((item, index) => { const mcq = parseMcq(item.text); return <article className="question-card" key={`${item.time}-${index}`}><div className="question-card-meta"><span>{index === transcript.length - 1 ? 'Latest question' : `Segment ${transcript.length - index}`}</span><time>{item.time}</time></div><h3>{mcq.question || item.text}</h3>{mcq.options.length > 0 && <div className="option-list">{mcq.options.map((option) => <div className="transcript-option" key={option.letter}><span>{option.letter}</span><p>{option.text || 'Listening…'}</p></div>)}</div>}</article> }) : !listening && !interimText && <div className="transcript-empty"><Mic size={24} /><strong>Start speaking your question</strong><span>Say “Question”, followed by options A through D. The transcript will stay visible.</span></div>}</div></section><section className="panel urgent-panel"><div className="panel-heading"><div><p className="section-label">URGENT CONTROLS</p><h2>Separate actions</h2></div><AlertTriangle size={18} className="orange-icon" /></div><button className="urgent-action" onClick={() => sendMotorCommand('QUICK_MOTOR_2', 2, 4, 'Urgent alert sent to motor 2 — 4 long vibrations')}><div className="urgent-icon"><Zap size={18} /></div><div><strong>Alert me</strong><span>Urgent notification to the phone</span></div><ChevronRight size={17} /></button><button className="secondary-action" onClick={() => sendMotorCommand('REPEAT_QUESTION', 2, 2, 'Repeat question sent to motor 2 — 2 vibrations')}><CircleHelp size={17} /><span><strong>Repeat question</strong><small>Ask the speaker to repeat the question</small></span><ChevronRight size={17} /></button><button className="secondary-action" onClick={() => sendSignal(signals[1], 2)}><Headphones size={17} /><span><strong>Quick response · motor 2</strong><small>Send Option 2 · 2 vibrations</small></span><ChevronRight size={17} /></button><button className="secondary-action" onClick={() => sendMotorCommand('REPEAT_OPTION', 2, 3, 'Repeat option sent to motor 2 — 3 vibrations')}><RefreshCw size={17} /><span><strong>Repeat option</strong><small>Ask for the last option again</small></span><ChevronRight size={17} /></button><div className="custom-pattern-editor"><div className="custom-pattern-title"><span>Custom vibration pattern</span><div className="motor-toggle"><button className={customMotor === 1 ? 'active' : ''} onClick={() => setCustomMotor(1)}>Motor 1</button><button className={customMotor === 2 ? 'active' : ''} onClick={() => setCustomMotor(2)}>Motor 2</button></div></div><div className="pattern-controls"><label><span>Vibrations</span><div><button onClick={() => setPulses(Math.max(1, pulses - 1))}>−</button><strong>{pulses}</strong><button onClick={() => setPulses(Math.min(20, pulses + 1))}>+</button></div></label><label><span>Pulse on (ms)</span><input type="number" min="50" max="5000" step="50" value={pulseDuration} onChange={(event) => setPulseDuration(Math.min(5000, Math.max(50, Number(event.target.value) || 50)))} /></label><label><span>Gap off (ms)</span><input type="number" min="50" max="5000" step="50" value={pulseGap} onChange={(event) => setPulseGap(Math.min(5000, Math.max(50, Number(event.target.value) || 50)))} /></label></div><button className="listen-button pattern-send" onClick={() => sendMotorCommand('CUSTOM_PATTERN', customMotor, pulses, `Custom pattern sent — motor ${customMotor}, ${pulses} pulses, ${pulseDuration} ms on, ${pulseGap} ms gap`, pulseDuration, pulseGap)}><Zap size={16} /> Send custom pattern</button></div></section></div>
       </>}
