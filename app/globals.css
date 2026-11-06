@@ -36,7 +36,7 @@ button{font:inherit;cursor:pointer}
 .live-caption strong{color:#2563eb}
 .live-transcript p{min-height:22px;margin:10px 0 0;color:#173b61;font-size:14px;font-weight:600;line-height:1.65}
 .live-transcript p span{color:#2563eb;text-decoration-color:#9bb9ef;text-decoration-line:underline;text-decoration-style:dotted;text-underline-offset:4px}
-.question-card{border:1px solid var(--line);border-radius:14px;background:#fff;padding:15px 16px;box-shadow:0 7px 22px rgba(41,76,125,.05)}
+.question-card{border:1px solid var(--line);border-radius:14px;background:#fff;padding:15px 16px;margin-bottom:24px;box-shadow:0 7px 22px rgba(41,76,125,.05)}
 .question-card-meta{display:flex;align-items:center;justify-content:space-between;color:#9aabc0;font-size:9px;text-transform:uppercase;letter-spacing:.06em}
 .question-card-meta span{color:#2563eb;font-weight:800}
 .question-card h3{margin:10px 0 12px;color:#173b61;font-size:15px;line-height:1.45}

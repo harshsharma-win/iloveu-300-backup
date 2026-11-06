@@ -58,6 +58,7 @@ export default function Page() {
   const recognitionRef = useRef<any>(null)
   const paragraphRef = useRef('')
   const shouldListenRef = useRef(false)
+  const answerTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     const savedDevice = window.localStorage.getItem('relay-device-id')
@@ -231,7 +232,12 @@ export default function Page() {
       setInterimText('')
       if (paragraphRef.current.trim()) {
         const text = paragraphRef.current.trim()
+        if (answerTimerRef.current !== null) {
+          window.clearTimeout(answerTimerRef.current)
+          answerTimerRef.current = null
+        }
         setTranscript((items) => [{ time: new Date().toLocaleTimeString([], { hour12: false }), text, tag: 'Saved' as const }, ...items].slice(0, 10))
+        void solveTranscript(text)
         paragraphRef.current = ''
       }
       return
@@ -260,15 +266,18 @@ export default function Page() {
       const chunk = finalText.trim().replace(/\s+/g, ' ')
       if (!chunk) return
       const combined = `${paragraphRef.current} ${chunk}`.trim().replace(/\s+/g, ' ')
-      const completedSentences = combined.match(/[^.!?]+[.!?]+/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? []
-      const completedText = completedSentences.join(' ')
-      paragraphRef.current = combined.slice(completedText.length).trim()
-      if (completedSentences.length) {
+      paragraphRef.current = combined
+
+      if (answerTimerRef.current !== null) window.clearTimeout(answerTimerRef.current)
+      answerTimerRef.current = window.setTimeout(() => {
+        const text = paragraphRef.current.trim()
+        if (!text) return
         const timestamp = new Date().toLocaleTimeString([], { hour12: false })
-        setTranscript((items) => [...completedSentences.map((sentence) => ({ time: timestamp, text: formatSpeech(sentence), tag: 'Live' as const })), ...items].slice(0, 20))
-        if (supabaseConfigured) void supabase.channel('esp32-relay-control').send({ type: 'broadcast', event: 'transcript', payload: { text: completedText } })
-        void solveTranscript(completedText)
-      }
+        setTranscript((items) => [{ time: timestamp, text: formatSpeech(text), tag: 'Live' as const }, ...items].slice(0, 20))
+        if (supabaseConfigured) void supabase.channel('esp32-relay-control').send({ type: 'broadcast', event: 'transcript', payload: { text } })
+        void solveTranscript(text)
+        paragraphRef.current = ''
+      }, 2200)
     }
 
     recognition.onerror = (event: any) => {
