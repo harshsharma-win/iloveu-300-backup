@@ -110,6 +110,21 @@ export default function Page() {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
+    async function checkAnswerProvider() {
+      try {
+        const response = await fetch('/api/mcq/answer', { cache: 'no-store' })
+        if (cancelled) return
+        if (response.status === 503) setAnswerStatus('AI key missing — add AI_API_KEY and restart dashboard')
+      } catch {
+        if (!cancelled) setAnswerStatus('AI answer service unavailable')
+      }
+    }
+    void checkAnswerProvider()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
     window.localStorage.setItem('relay-custom-pattern', JSON.stringify({
       pulses,
       duration: pulseDuration,

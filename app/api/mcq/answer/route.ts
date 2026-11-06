@@ -3,6 +3,13 @@ import { isRelaySessionValid } from '@/lib/relay-session'
 
 type McqOption = { letter: string; text: string }
 
+export async function GET() {
+  if (!process.env.AI_API_KEY) {
+    return NextResponse.json({ ok: false, configured: false, error: 'AI answer provider is not configured.' }, { status: 503 })
+  }
+  return NextResponse.json({ ok: true, configured: true })
+}
+
 export async function POST(request: Request) {
   if (!isRelaySessionValid(request)) {
     return NextResponse.json({ ok: false, error: 'Dashboard session required.' }, { status: 401 })
