@@ -18,7 +18,7 @@ function formatSpeech(text: string) {
   if (!normalized) return ''
   return normalized
     .replace(/\bi\b/g, 'I')
-    .replace(/\b(?:option\s+)?([ABCD])\s*[.):]\s*/gi, '\nOption $1:')
+    .replace(/\b(?:option\s*)?([ABCD])\s*[):.\-]\s*/gi, '\nOption $1:')
 }
 
 function parseMcq(text: string) {
